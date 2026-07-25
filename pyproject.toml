@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scrabble-game"
+version = "0.1.0"
+description = "Jeu de Scrabble (français) desktop — solo vs IA, animations, multijoueur à venir."
+requires-python = ">=3.11"
+dependencies = ["PySide6>=6.6"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+scrabble = "scrabble.ui.main_window:run"
+
+[tool.setuptools.packages.find]
+include = ["scrabble*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# ---------------------------------------------------------------------------
+# Briefcase — génère les paquets natifs signés attendus par les stores.
+#   Dév  : briefcase dev
+#   macOS: briefcase create macOS && briefcase build macOS && briefcase package macOS
+# Le packaging Mac App Store demande un certificat Apple Developer + notarisation.
+# ---------------------------------------------------------------------------
+[tool.briefcase]
+project_name = "Scrabble"
+bundle = "com.example"          # ← remplace par ton identifiant inverse réel
+version = "0.1.0"
+author = "NomelN"
+
+[tool.briefcase.app.scrabble]
+formal_name = "Scrabble"
+description = "Jeu de Scrabble français avec IA et animations."
+sources = ["scrabble"]
+requires = ["PySide6>=6.6"]
+test_requires = ["pytest>=8"]
+
+[tool.briefcase.app.scrabble.macOS]
+requires = ["std-nslog>=1.0.0"]
+
+[tool.briefcase.app.scrabble.windows]
+[tool.briefcase.app.scrabble.linux]

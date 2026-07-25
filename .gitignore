@@ -1,0 +1,31 @@
+# Environnements virtuels
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Briefcase (paquets générés)
+/macOS/
+/windows/
+/linux/
+/iOS/
+/android/
+
+# Dictionnaire (3,3 Mo) — ignoré par défaut pour ne pas alourdir le dépôt.
+# La liste installée est « Français GUTenberg » (libre), donc tu PEUX la
+# versionner si tu ajoutes l'attribution ; dans ce cas, retire cette ligne.
+# ⚠️ En revanche, ne versionne jamais une liste ODS (sous copyright).
+scrabble/data/dictionnaire_fr.txt
+
+# macOS
+.DS_Store
+
+# Éditeurs
+.idea/
+.vscode/
