@@ -25,7 +25,7 @@ from .base import Action, ActionKind, AIPlayer, Candidate
 
 # Endpoint compatible OpenAI de DeepSeek.
 API_URL = "https://api.deepseek.com/chat/completions"
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-v4-flash"   # deepseek-chat n'est plus supporté
 
 # Un « transport » = fonction (messages, model) -> texte de réponse. On l'isole
 # pour pouvoir le remplacer par un faux dans les tests (aucun réseau requis).

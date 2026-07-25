@@ -79,6 +79,34 @@ def test_placed_letter_disappears_from_rack(qapp):
     assert rack_view._used == set()
 
 
+def test_move_shows_score_badge_and_definition(qapp):
+    from scrabble.definitions import Definitions
+    game = Game(["Toi", "Ordi"], dictionary=Dictionary.demo(),
+                ai_flags=[False, True], seed=3)
+    game.players[0].rack.tiles = list("MOTABCE")
+    board_view = BoardView(game.board)
+    rack_view = RackView()
+    # Définitions locales déterministes (aucun réseau).
+    defs = Definitions(local={"MOT": "suite de lettres"}, api_key=None)
+    captured = []
+    controller = GameController(game, board_view, rack_view,
+                                ai_players={1: make_ai("easy")}, human_index=0,
+                                definitions=defs)
+    controller.sync_ai = True
+    controller.definition_changed.connect(lambda w, t: captured.append((w, t)))
+    controller.start()
+
+    for i, (r, c) in enumerate([(7, 7), (7, 8), (7, 9)]):
+        rack_view.select(i)
+        controller.place_at(r, c)
+    controller.commit()
+
+    # Badge de score affiché sur le plateau.
+    assert board_view._badge_items, "le badge de score doit être affiché"
+    # Définition (locale) émise pour le mot joué.
+    assert ("MOT", "suite de lettres") in captured
+
+
 def test_blank_tile_is_resolved_to_a_letter(qapp):
     game = Game(["Toi", "Ordi"], dictionary=Dictionary.demo(),
                 ai_flags=[False, True], seed=3)
@@ -165,6 +193,30 @@ def test_duplicate_letters_only_one_hidden(qapp):
     assert len(visibles) == 5
 
 
+def test_drag_pixmap_matches_board_scale(qapp):
+    """L'image de glisser du chevalet est dimensionnée à la case du plateau
+    (sinon le fantôme déborde sur les cases voisines → chevauchement visuel)."""
+    game, board_view, rack_view, controller = _fresh(qapp, letters="MARELLE")
+    board_view.resize(560, 560)
+    board_view.show()
+    qapp.processEvents()
+    provider = rack_view._cell_size_provider
+    assert provider is not None
+    size = provider()
+    assert isinstance(size, int) and size > 0
+    assert size == board_view.screen_cell_size()
+
+
+def test_marelle_all_seven_tiles_place_distinctly(qapp):
+    """Deux L et deux E (MARELLE) se posent sur 7 cases distinctes, sans conflit."""
+    game, board_view, rack_view, controller = _fresh(qapp, letters="MARELLE")
+    for idx, col in enumerate(range(4, 11)):
+        controller.place_index_at(7, col, idx)
+    assert controller.pending_count == 7
+    assert len(controller.placed_cells) == 7          # aucune case en double
+    assert board_view.has_pending_at(7, 8) and board_view.has_pending_at(7, 9)  # les 2 L
+
+
 def test_rack_reorder(qapp):
     game, board_view, rack_view, controller = _fresh(qapp, letters="ABCDEFG")
     before = [s.letter for s in controller._slots]
@@ -175,7 +227,28 @@ def test_rack_reorder(qapp):
     assert after[3] == "A"
 
 
-def test_illegal_move_is_reverted(qapp):
+def test_threaded_ai_turn_completes_without_crash(qapp):
+    """Le tour de l'IA en mode threadé (worker QRunnable) se termine proprement,
+    et couper la partie en plein calcul ne fait pas planter (garde anti-segfault)."""
+    from PySide6.QtCore import QEventLoop, QTimer
+    game, board_view, rack_view, controller = _fresh(qapp, letters="MOTABCE")
+    controller.sync_ai = False              # passe par le thread
+
+    for i, (r, c) in enumerate([(7, 7), (7, 8), (7, 9)]):
+        rack_view.select(i)
+        controller.place_at(r, c)
+    controller.commit()                     # déclenche le tour IA threadé
+
+    # Laisse le worker + ses callbacks s'exécuter sur la boucle d'événements.
+    loop = QEventLoop()
+    QTimer.singleShot(800, loop.quit)
+    loop.exec()
+
+    assert any(e.player == 1 for e in game.events)   # l'IA a bien joué
+    # Couper la partie pendant/aprés le thread ne doit rien casser.
+    controller.shutdown()
+    QTimer.singleShot(50, loop.quit)
+    loop.exec()
     game = Game(["Toi", "Ordi"], dictionary=Dictionary.demo(),
                 ai_flags=[False, True], seed=5)
     game.players[0].rack.tiles = list("XYZABCE")

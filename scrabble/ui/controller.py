@@ -23,6 +23,8 @@ from ..core.board import Placement
 from ..core.game import EventType, Game
 from ..core.rules import InvalidMove
 from ..core.tiles import BLANK
+from ..definitions import Definitions
+from ..stats import Stats
 from . import animations
 from .board_view import BoardView
 from .rack_view import RackView
@@ -39,6 +41,28 @@ class RackSlot:
 class _AiSignals(QObject):
     done = Signal(object)
     failed = Signal(str)
+
+
+class _DefSignals(QObject):
+    done = Signal(str, str)   # mot, définition
+
+
+class _DefWorker(QRunnable):
+    """Récupère une définition hors du thread UI (secours DeepSeek = réseau)."""
+
+    def __init__(self, definitions: Definitions, word: str) -> None:
+        super().__init__()
+        self._definitions = definitions
+        self._word = word
+        self.signals = _DefSignals()
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            text = self._definitions.remote_lookup(self._word) or ""
+        except Exception:  # pragma: no cover - garde-fou
+            text = ""
+        self.signals.done.emit(self._word, text)
 
 
 class _AiWorker(QRunnable):
@@ -63,6 +87,8 @@ class GameController(QObject):
     comment_changed = Signal(str)
     scores_changed = Signal(list)
     bag_changed = Signal(int)
+    definition_changed = Signal(str, str)   # mot, définition (ou "" / "…")
+    game_over = Signal(bool, int)           # (le joueur a gagné, score du joueur)
 
     def __init__(
         self,
@@ -72,6 +98,8 @@ class GameController(QObject):
         ai_players: dict[int, AIPlayer],
         human_index: int = 0,
         blank_resolver: Callable[[], str | None] | None = None,
+        definitions: Definitions | None = None,
+        stats: Stats | None = None,
     ) -> None:
         super().__init__()
         self.game = game
@@ -80,10 +108,22 @@ class GameController(QObject):
         self.ai_players = ai_players
         self.human_index = human_index
         self.blank_resolver = blank_resolver or self._default_blank_resolver
+        self.definitions = definitions or Definitions.load_default()
+        self.stats = stats
         self.sync_ai = False
 
         self._slots: list[RackSlot] = []
         self._events_seen = 0
+        #: contrôleur actif ? Passe à False via shutdown() quand la partie est
+        #: remplacée, pour que les workers en cours ne touchent plus les vues
+        #: (dont le plateau détruit) — évite les segfaults.
+        self._active = True
+        #: workers en cours, gardés en vie explicitement (sinon le GC Python
+        #: peut les détruire pendant que Qt les exécute → segfault).
+        self._workers: set = set()
+
+        # L'image de glisser du chevalet est dimensionnée à la case du plateau.
+        self.rack.set_cell_size_provider(self.board.screen_cell_size)
 
         self.board.cell_clicked.connect(self.place_at)
         self.board.tile_dropped.connect(self.place_index_at)
@@ -100,6 +140,11 @@ class GameController(QObject):
     @property
     def placed_cells(self) -> set[tuple[int, int]]:
         return {s.cell for s in self._slots if s.cell is not None}
+
+    def shutdown(self) -> None:
+        """Désactive le contrôleur (partie remplacée / fenêtre fermée) : les
+        callbacks des workers encore en vol deviennent des no-op."""
+        self._active = False
 
     # -- Démarrage --------------------------------------------------------
     def start(self) -> None:
@@ -254,14 +299,20 @@ class GameController(QObject):
             self._apply_ai_action(ai.choose(self.game))
             return
         worker = _AiWorker(ai, self.game)
+        worker.setAutoDelete(False)          # on gère nous-mêmes la durée de vie
+        self._workers.add(worker)
         worker.signals.done.connect(self._apply_ai_action)
         worker.signals.failed.connect(
             lambda msg: self.status_changed.emit(f"IA en erreur : {msg}")
         )
+        worker.signals.done.connect(lambda *_: self._workers.discard(worker))
+        worker.signals.failed.connect(lambda *_: self._workers.discard(worker))
         QThreadPool.globalInstance().start(worker)
 
     @Slot(object)
     def _apply_ai_action(self, action: Action) -> None:
+        if not self._active:          # partie remplacée : ne touche plus les vues
+            return
         ai = self.ai_players.get(self.game.current)
         comment = getattr(ai, "last_comment", "")
         if comment:
@@ -299,12 +350,53 @@ class GameController(QObject):
                 res = event.payload["result"]
                 name = self.game.players[event.player].name
                 self.status_changed.emit(f"{name} joue « {res.main_word} » (+{res.total})")
+                # Badge de score (remplace le précédent) + définition du mot.
+                self.board.show_score_badge(res.words[0].cells, res.total)
+                self._show_definition(res.main_word)
+                # Statistiques : uniquement les coups du joueur humain.
+                if self.stats is not None and event.player == self.human_index:
+                    self.stats.record_move(res.total, res.main_word, res.is_bingo)
             elif event.type is EventType.EXCHANGED:
                 name = self.game.players[event.player].name
                 self.status_changed.emit(f"{name} échange {event.payload['count']} lettre(s).")
             elif event.type is EventType.PASSED:
                 self.status_changed.emit(f"{self.game.players[event.player].name} passe.")
+            elif event.type is EventType.GAME_OVER:
+                self._record_game_over(event.payload["scores"])
         self._events_seen = len(self.game.events)
+
+    def _record_game_over(self, scores: list[int]) -> None:
+        human = scores[self.human_index]
+        won = human == max(scores) and scores.count(max(scores)) == 1
+        if self.stats is not None:
+            self.stats.record_game_end(human, won)
+            self.stats.save()
+        self.game_over.emit(won, human)
+
+    # -- Définition du mot joué -------------------------------------------
+    def _show_definition(self, word: str) -> None:
+        """Local d'abord (instantané) ; sinon DeepSeek dans un thread."""
+        if not word:
+            return
+        local = self.definitions.local_lookup(word)
+        if local is not None:
+            self.definition_changed.emit(word, local)
+            return
+        if not self.definitions.remote_available:
+            self.definition_changed.emit(word, "")   # aucune source
+            return
+        self.definition_changed.emit(word, "…")       # en attente de DeepSeek
+        worker = _DefWorker(self.definitions, word)
+        worker.setAutoDelete(False)
+        self._workers.add(worker)
+        worker.signals.done.connect(self._on_definition_ready)
+        worker.signals.done.connect(lambda *_: self._workers.discard(worker))
+        QThreadPool.globalInstance().start(worker)
+
+    @Slot(str, str)
+    def _on_definition_ready(self, word: str, text: str) -> None:
+        if self._active:
+            self.definition_changed.emit(word, text)
 
     # -- Helpers ----------------------------------------------------------
     def _cell_free(self, row: int, col: int) -> bool:

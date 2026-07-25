@@ -17,6 +17,9 @@ dist/
 /iOS/
 /android/
 
+# Cache de définitions alimenté automatiquement par DeepSeek (local, non partagé).
+scrabble/data/definitions_cache.txt
+
 # Dictionnaire (3,3 Mo) — ignoré par défaut pour ne pas alourdir le dépôt.
 # La liste installée est « Français GUTenberg » (libre), donc tu PEUX la
 # versionner si tu ajoutes l'attribution ; dans ce cas, retire cette ligne.
@@ -29,3 +32,5 @@ scrabble/data/dictionnaire_fr.txt
 # Éditeurs
 .idea/
 .vscode/
+
+.env.local

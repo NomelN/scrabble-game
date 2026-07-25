@@ -87,6 +87,16 @@ Attribution / licence :
   ajoutant l'attribution (retire la ligne correspondante du `.gitignore`).
 - ⚠️ **Ne versionne jamais** une liste **ODS** (Officiel du Scrabble), sous copyright.
 
+### Définitions des mots joués
+
+Quand un mot est posé, l'appli affiche sa **définition** (bandeau du haut) et un
+**badge de score** sur le plateau. Résolution : `data/definitions_fr.txt` (graine
+versionnée) → cache local → **DeepSeek** en secours (si `DEEPSEEK_API_KEY`).
+Les définitions ramenées par DeepSeek sont **mises en cache** dans
+`data/definitions_cache.txt` (gitignoré), donc la couverture hors-ligne grandit
+au fil des parties. Une définition n'a **aucun rôle dans les règles** (le mot
+est déjà validé par le dictionnaire) — c'est un usage approprié de l'IA.
+
 ### Option ODS (développement local uniquement)
 
 Pour développer avec le vrai **ODS8** (402 325 mots après normalisation) :

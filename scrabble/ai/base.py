@@ -145,18 +145,32 @@ class AIPlayer:
         self._rng = random.Random(seed)
 
     def choose(self, game) -> Action:
-        rack = game.current_player.rack.tiles
+        """Décide de l'action. L'IA ne joue QUE des mots valides : `generate_moves`
+        ne renvoie que des coups déjà validés contre le dictionnaire (et `game.play`
+        re-valide). Si aucun mot n'est jouable, elle décide entre échanger et passer.
+        """
         candidates = generate_moves(
-            game.board, rack, game.dictionary,
+            game.board, game.current_player.rack.tiles, game.dictionary,
             max_len=self.max_len, limit=self.search_limit,
         )
         if candidates:
             return self._select(candidates)
-        # Aucun coup : échanger si possible, sinon passer.
-        if not game.bag.is_empty and rack:
-            k = min(len(rack), 7)
-            return Action(ActionKind.EXCHANGE, tiles=list(rack[:k]))
+        return self._fallback(game)
+
+    def _fallback(self, game) -> Action:
+        """Aucun mot jouable : l'IA choisit elle-même entre changer ses lettres
+        et passer. On n'échange que si le sac contient assez de tuiles (règle du
+        Scrabble : au moins 7) ; sinon (fin de partie, sac presque vide) on passe.
+        Dans tous les cas, jamais de mot inventé."""
+        rack = list(game.current_player.rack.tiles)
+        if rack and len(game.bag) >= 7:
+            return Action(ActionKind.EXCHANGE, tiles=self._tiles_to_exchange(rack))
         return Action(ActionKind.PASS)
+
+    def _tiles_to_exchange(self, rack: list[str]) -> list[str]:
+        """Tuiles à changer quand l'IA est bloquée. Par défaut : toute la main
+        (nouveau tirage). Un niveau plus fin pourra n'en garder que les meilleures."""
+        return rack
 
     def _select(self, candidates: list[Candidate]) -> Action:  # pragma: no cover
         raise NotImplementedError

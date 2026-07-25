@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QDrag, QFont, QPen
+from PySide6.QtGui import QBrush, QColor, QDrag, QFont, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from ..core.board import Board, SIZE, CENTER
@@ -45,12 +45,18 @@ class BoardView(QGraphicsView):
         self._press_cell: tuple[int, int] | None = None
         self._press_pos: QPoint | None = None
         self._dragging = False
+        self._badge_items: list = []          # badge de score du dernier mot
         self._draw_grid()
         self.setSceneRect(0, 0, SIZE * _STEP, SIZE * _STEP)
 
     # -- Mise à l'échelle responsive (pas de scroll) ----------------------
     def _fit(self) -> None:
         self.fitInView(self.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+
+    def screen_cell_size(self) -> int:
+        """Taille d'une case *à l'écran* (tient compte de la mise à l'échelle).
+        Sert à dimensionner l'image de glisser pour qu'elle colle aux cases."""
+        return max(14, round(_STEP * self.transform().m11()))
 
     def resizeEvent(self, event) -> None:  # noqa: N802 (API Qt)
         super().resizeEvent(event)
@@ -103,7 +109,7 @@ class BoardView(QGraphicsView):
         mime = QMimeData()
         mime.setData(TILE_MIME, f"board:{cell[0]},{cell[1]}".encode("ascii"))
         drag.setMimeData(mime)
-        pm = tile_pixmap(tile.letter)
+        pm = tile_pixmap(tile.letter, self.screen_cell_size(), alpha=0.85)
         drag.setPixmap(pm)
         drag.setHotSpot(QPoint(pm.width() // 2, pm.height() // 2))
         drag.exec(Qt.DropAction.MoveAction)
@@ -204,6 +210,46 @@ class BoardView(QGraphicsView):
 
     def has_pending_at(self, row: int, col: int) -> bool:
         return (row, col) in self._pending
+
+    # -- Badge de score du dernier mot joué -------------------------------
+    def show_score_badge(self, cells: list[tuple[int, int]], points: int) -> None:
+        """Affiche un petit badge bleu avec le score, juste après le mot.
+        Remplace le badge précédent (donc il « disparaît » au coup suivant)."""
+        self.clear_score_badge()
+        if not cells:
+            return
+        rows = {r for r, _ in cells}
+        if len(rows) == 1:                        # mot horizontal
+            r = cells[0][0]
+            c = max(c for _, c in cells) + 1
+            if c >= SIZE:
+                r, c = cells[0][0], max(c for _, c in cells)
+        else:                                     # mot vertical
+            c = cells[0][1]
+            r = max(rr for rr, _ in cells) + 1
+            if r >= SIZE:
+                r, c = max(rr for rr, _ in cells), cells[0][1]
+
+        sz = theme.CELL * 0.64
+        bx = c * _STEP + (theme.CELL - sz) / 2
+        by = r * _STEP + (theme.CELL - sz) / 2
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(bx, by, sz, sz), 6, 6)
+        badge = self._scene.addPath(path, QPen(QColor("#12405f"), 1),
+                                    QBrush(QColor("#2f6fb0")))
+        badge.setZValue(20)
+        text = self._scene.addText(str(points),
+                                   QFont("Helvetica", int(sz * 0.42), QFont.Weight.Bold))
+        text.setDefaultTextColor(QColor("#ffffff"))
+        tr = text.boundingRect()
+        text.setPos(bx + (sz - tr.width()) / 2, by + (sz - tr.height()) / 2)
+        text.setZValue(21)
+        self._badge_items = [badge, text]
+
+    def clear_score_badge(self) -> None:
+        for item in self._badge_items:
+            self._scene.removeItem(item)
+        self._badge_items = []
 
     def clear_pending(self) -> None:
         for tile in self._pending.values():

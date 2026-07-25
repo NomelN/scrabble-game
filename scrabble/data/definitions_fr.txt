@@ -1,0 +1,32 @@
+WEB	Ensemble des pages et sites reliés sur Internet.
+CAFE	Boisson obtenue à partir de grains torréfiés.
+CAFES	Boissons à base de grains de café torréfiés.
+MAIN	Extrémité du bras, munie de cinq doigts.
+MAINTENANT	Au moment présent, à cet instant.
+MOT	Suite de lettres ayant un sens.
+MOTS	Suites de lettres ayant un sens.
+JEU	Activité pratiquée pour se divertir.
+JEUX	Activités pratiquées pour se divertir.
+CHAT	Petit mammifère domestique de la famille des félins.
+CHATS	Petits félins domestiques.
+ARBRE	Grande plante ligneuse à tronc et branches.
+ARBRES	Grandes plantes ligneuses à tronc et branches.
+TABLE	Meuble à plateau horizontal sur des pieds.
+TABLES	Meubles à plateau horizontal sur des pieds.
+ROI	Souverain d'un royaume.
+ROIS	Souverains de royaumes.
+EAU	Liquide transparent, incolore et inodore.
+VIE	Ensemble des phénomènes propres aux êtres vivants.
+RAT	Petit rongeur à longue queue.
+RATS	Petits rongeurs à longue queue.
+PARI	Engagement portant sur un résultat incertain.
+PARIS	Engagements portant sur un résultat incertain.
+OR	Métal précieux jaune et brillant.
+AS	Carte marquée d'un seul point ; personne très douée.
+ZUT	Interjection marquant le dépit.
+ZEBU	Bovin domestique à bosse des régions chaudes.
+QAT	Arbuste dont les feuilles ont un effet stimulant.
+IF	Arbre conifère à feuillage sombre et persistant.
+OUI	Adverbe d'affirmation.
+NON	Adverbe de négation.
+UN	Le premier des nombres entiers.

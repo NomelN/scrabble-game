@@ -15,12 +15,14 @@ from ..core.tiles import letter_value
 from . import theme
 
 
-def tile_pixmap(letter: str, size: int = theme.CELL) -> QPixmap:
-    """Rendu d'une tuile dorée en image — sert d'aperçu pendant un glisser."""
+def tile_pixmap(letter: str, size: int = theme.CELL, alpha: float = 1.0) -> QPixmap:
+    """Rendu d'une tuile dorée en image — sert d'aperçu pendant un glisser.
+    ``alpha`` < 1 rend la tuile translucide (pour voir la case sous le curseur)."""
     pm = QPixmap(size, size)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setOpacity(alpha)
     rect = QRectF(1, 1, size - 2, size - 2)
     p.setBrush(QBrush(theme.gold_grad(rect)))
     p.setPen(QPen(theme.TILE_SHADOW_EDGE, 1))

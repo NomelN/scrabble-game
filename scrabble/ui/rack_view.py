@@ -53,6 +53,17 @@ class RackView(QGraphicsView):
         self._used: set[int] = set()          # indices posés (donc masqués)
         self._press_index: int | None = None
         self._press_pos: QPoint | None = None
+        #: fournit la taille (px écran) d'une case du plateau, pour que l'image
+        #: de glisser colle exactement aux cases (évite le chevauchement visuel).
+        self._cell_size_provider = None
+
+    def set_cell_size_provider(self, provider) -> None:
+        self._cell_size_provider = provider
+
+    def _drag_tile_size(self) -> int:
+        if self._cell_size_provider is not None:
+            return self._cell_size_provider()
+        return theme.CELL
 
     # -- État --------------------------------------------------------------
     def set_letters(self, letters: list[str]) -> None:
@@ -111,7 +122,7 @@ class RackView(QGraphicsView):
         mime = QMimeData()
         mime.setData(TILE_MIME, f"rack:{index}".encode("ascii"))
         drag.setMimeData(mime)
-        pm = tile_pixmap(self._letters[index])
+        pm = tile_pixmap(self._letters[index], self._drag_tile_size(), alpha=0.85)
         drag.setPixmap(pm)
         drag.setHotSpot(QPoint(pm.width() // 2, pm.height() // 2))
         drag.exec(Qt.DropAction.MoveAction)
