@@ -88,6 +88,21 @@ class Board:
         for p in placements:
             self._grid[p.row][p.col] = p.letter
 
+    # -- Sérialisation (sauvegarde / reprise) -----------------------------
+    def serialize(self) -> list[list[str | None]]:
+        return [list(row) for row in self._grid]
+
+    def restore(self, rows: list[list[str | None]]) -> None:
+        self._grid = [list(row) for row in rows]
+
+    def filled_cells(self):
+        """Itère les cases occupées : (row, col, lettre)."""
+        for r in range(SIZE):
+            for c in range(SIZE):
+                letter = self._grid[r][c]
+                if letter is not None:
+                    yield r, c, letter
+
 
 def in_bounds(row: int, col: int) -> bool:
     return 0 <= row < SIZE and 0 <= col < SIZE

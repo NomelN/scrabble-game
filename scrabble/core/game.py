@@ -64,6 +64,38 @@ class Game:
         self._consecutive_scoreless = 0  # 6 tours blancs => fin de partie
         self.events: list[GameEvent] = []
 
+    # -- Sérialisation (sauvegarde / reprise) -----------------------------
+    def to_dict(self) -> dict:
+        """État complet de la partie, sérialisable en JSON (hors dictionnaire)."""
+        return {
+            "board": self.board.serialize(),
+            "bag": self.bag.to_list(),
+            "current": self.current,
+            "is_over": self.is_over,
+            "scoreless": self._consecutive_scoreless,
+            "players": [
+                {"name": p.name, "is_ai": p.is_ai,
+                 "rack": list(p.rack.tiles), "score": p.score}
+                for p in self.players
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict, dictionary: Dictionary) -> "Game":
+        """Reconstruit une partie depuis `to_dict` (le dictionnaire est rechargé)."""
+        players = data["players"]
+        game = cls([p["name"] for p in players], dictionary=dictionary,
+                   ai_flags=[p["is_ai"] for p in players])
+        game.board.restore(data["board"])
+        game.bag = Bag.from_list(data["bag"])
+        for player, pdata in zip(game.players, players):
+            player.rack = Rack(pdata["rack"])
+            player.score = pdata["score"]
+        game.current = data["current"]
+        game.is_over = data["is_over"]
+        game._consecutive_scoreless = data["scoreless"]
+        return game
+
     # -- Introspection ----------------------------------------------------
     @property
     def current_player(self) -> Player:

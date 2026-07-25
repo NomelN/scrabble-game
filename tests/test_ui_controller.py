@@ -270,3 +270,37 @@ def test_threaded_ai_turn_completes_without_crash(qapp):
     # Les tuiles restent posées pour être corrigées (on ne perd pas le coup).
     assert controller.pending_count == 3
     assert game.current == 0                 # toujours au tour de l'humain
+
+
+def test_resumed_game_renders_existing_tiles(qapp):
+    """Au démarrage, le contrôleur réaffiche les tuiles déjà posées (reprise)."""
+    from scrabble.core.board import Placement
+    game = Game(["Toi", "Ordi"], dictionary=Dictionary.demo(),
+                ai_flags=[False, True], seed=1)
+    game.players[0].rack.tiles = list("MOTABCE")
+    game.play([Placement(7, 7, "M"), Placement(7, 8, "O"), Placement(7, 9, "T")])
+    board_view = BoardView(game.board)
+    rack_view = RackView()
+    controller = GameController(game, board_view, rack_view,
+                                ai_players={1: make_ai("easy")}, human_index=0)
+    controller.sync_ai = True
+    controller.start()
+    for cell in [(7, 7), (7, 8), (7, 9)]:
+        assert cell in board_view._tiles
+
+
+def test_exchange_by_indices(qapp):
+    """Échanger des tuiles précises du chevalet (via la boîte d'échange)."""
+    game, board_view, rack_view, controller = _fresh(qapp, letters="MOTABCE")
+    controller.exchange_by_indices([0, 1])          # échange M, O
+    assert any(e.type == EventType.EXCHANGED for e in game.events)
+    assert len(game.players[0].rack.tiles) == 7     # main complète après échange
+
+
+def test_exchange_dialog_selection(qapp):
+    from scrabble.ui.dialogs import ExchangeDialog
+    dlg = ExchangeDialog(None, list("MOTABCE"))
+    assert len(dlg._buttons) == 7
+    dlg._buttons[0].setChecked(True)
+    dlg._buttons[3].setChecked(True)
+    assert dlg.selected_indices() == [0, 3]

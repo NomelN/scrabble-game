@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
 
+from .. import savegame
 from ..core.dictionary import Dictionary
 from ..definitions import Definitions
 from ..stats import Stats
@@ -47,20 +48,33 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._stack)
 
         self._menu.start_game.connect(self._start_game)
+        self._menu.resume_game.connect(self._resume_game)
         self._game.quit_to_menu.connect(self._back_to_menu)
 
-        self._menu.refresh_stats(self._stats)
-        self._stack.setCurrentWidget(self._menu)
+        self._show_menu()
         self.resize(720, 1040)
+
+    def _show_menu(self) -> None:
+        self._menu.refresh_stats(self._stats)
+        self._menu.set_can_resume(savegame.has_save())
+        self._stack.setCurrentWidget(self._menu)
 
     def _start_game(self, level: str) -> None:
         self._game.start_game(level)
         self._stack.setCurrentWidget(self._game)
 
+    def _resume_game(self) -> None:
+        loaded = savegame.load_game(self._dictionary)
+        if loaded is None:
+            self._show_menu()          # sauvegarde illisible : on reste au menu
+            return
+        game, level = loaded
+        self._game.resume_game(game, level)
+        self._stack.setCurrentWidget(self._game)
+
     def _back_to_menu(self) -> None:
         self._game.shutdown()
-        self._menu.refresh_stats(self._stats)   # stats mises à jour en fin de partie
-        self._stack.setCurrentWidget(self._menu)
+        self._show_menu()              # stats + bouton reprise à jour
 
     def closeEvent(self, event) -> None:  # noqa: N802 (API Qt)
         self._game.shutdown()

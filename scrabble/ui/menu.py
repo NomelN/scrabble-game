@@ -39,6 +39,7 @@ _RULES = (
 
 class MenuWidget(QWidget):
     start_game = Signal(str)   # clé de niveau (ex. "medium")
+    resume_game = Signal()     # reprendre la partie sauvegardée
 
     def __init__(self, dictionary_label: str = "Français") -> None:
         super().__init__()
@@ -55,6 +56,11 @@ class MenuWidget(QWidget):
         self._level_box = QComboBox()
         self._level_box.addItems(LEVELS.keys())
         self._level_box.setCurrentText("Moyen")
+
+        self._resume_btn = gold_button("", "Reprendre ma Partie")
+        self._resume_btn.setMinimumHeight(56)
+        self._resume_btn.clicked.connect(self.resume_game)
+        self._resume_btn.setVisible(False)   # affiché seulement s'il y a une sauvegarde
 
         play_btn = gold_button("", "Nouvelle partie")
         play_btn.setMinimumHeight(56)
@@ -90,6 +96,7 @@ class MenuWidget(QWidget):
         root.addWidget(self._field("Dictionnaire", self._dict_box))
         root.addWidget(self._field("Niveau", self._level_box))
         root.addSpacing(6)
+        root.addWidget(self._resume_btn)
         root.addWidget(play_btn)
         root.addSpacing(20)
         root.addWidget(stats_title)
@@ -109,6 +116,10 @@ class MenuWidget(QWidget):
         holder = QWidget()
         holder.setLayout(box)
         return holder
+
+    def set_can_resume(self, can_resume: bool) -> None:
+        """Affiche « Reprendre ma Partie » seulement si une sauvegarde existe."""
+        self._resume_btn.setVisible(can_resume)
 
     def refresh_stats(self, stats: Stats) -> None:
         """Met à jour l'affichage depuis l'objet Stats (après chaque partie)."""

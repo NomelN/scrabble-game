@@ -31,6 +31,18 @@ class Bag:
         drawn, self._tiles = self._tiles[:n], self._tiles[n:]
         return drawn
 
+    # -- Sérialisation (sauvegarde / reprise) -----------------------------
+    def to_list(self) -> list[str]:
+        return list(self._tiles)
+
+    @classmethod
+    def from_list(cls, tiles: list[str]) -> "Bag":
+        """Reconstruit un sac à partir de tuiles connues (ordre préservé)."""
+        bag = cls.__new__(cls)          # évite le mélange de __init__
+        bag._rng = random.Random()
+        bag._tiles = list(tiles)
+        return bag
+
     def exchange(self, tiles: list[str]) -> list[str]:
         """Rend des tuiles au sac et en repioche autant. Les tuiles rendues
         ne peuvent pas être repiochées immédiatement (on pioche d'abord)."""

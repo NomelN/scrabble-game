@@ -89,6 +89,7 @@ class GameController(QObject):
     bag_changed = Signal(int)
     definition_changed = Signal(str, str)   # mot, définition (ou "" / "…")
     game_over = Signal(bool, int)           # (le joueur a gagné, score du joueur)
+    turn_finished = Signal()                # état stable après un coup (à sauvegarder)
 
     def __init__(
         self,
@@ -148,12 +149,21 @@ class GameController(QObject):
 
     # -- Démarrage --------------------------------------------------------
     def start(self) -> None:
+        self._render_board()          # rend les tuiles déjà posées (reprise)
         self._rebuild_slots()
         self._refresh_scores()
         self._refresh_bag()
+        if self.game.is_over:
+            self.status_changed.emit("Partie terminée !")
+            return
         self._announce_turn()
         if self._current_is_ai():
             self._run_ai_turn()
+
+    def _render_board(self) -> None:
+        """Affiche les tuiles déjà présentes sur le plateau (partie reprise)."""
+        for r, c, letter in self.game.board.filled_cells():
+            self.board.place_tile(r, c, letter, animate=False)
 
     def shuffle_rack(self) -> None:
         """Réordonne aléatoirement le chevalet (bouton « Mélanger »)."""
@@ -282,6 +292,26 @@ class GameController(QObject):
             return
         self._after_turn()
 
+    def rack_letters(self) -> list[str]:
+        """Lettres du chevalet du joueur (pour la boîte d'échange)."""
+        return [s.letter for s in self._slots]
+
+    def exchange_by_indices(self, indices: list[int]) -> None:
+        """Échange les tuiles du chevalet aux indices donnés (boîte d'échange)."""
+        if self._current_is_ai():
+            return
+        letters = [self._slots[i].letter for i in indices
+                   if 0 <= i < len(self._slots)]
+        if not letters:
+            return
+        self.recall()
+        try:
+            self.game.exchange(letters)
+        except InvalidMove as exc:
+            self.status_changed.emit(f"Échange impossible : {exc.detail or exc.reason}")
+            return
+        self._after_turn()
+
     def pass_turn(self) -> None:
         if self._current_is_ai():
             return
@@ -333,6 +363,7 @@ class GameController(QObject):
         self._rebuild_slots()
         self._refresh_scores()
         self._refresh_bag()
+        self.turn_finished.emit()      # état stable -> l'UI peut sauvegarder
         if self.game.is_over:
             self.status_changed.emit("Partie terminée !")
             return

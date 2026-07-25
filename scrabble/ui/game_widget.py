@@ -9,10 +9,12 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from .. import savegame
 from ..ai import make_ai
 from ..core.game import Game
 from .board_view import BoardView
 from .controller import GameController
+from .dialogs import ConfirmDialog, ExchangeDialog
 from .rack_view import RackView
 from .widgets import BagWidget, gold_button, green_button
 
@@ -27,6 +29,7 @@ class GameWidget(QWidget):
         self._definitions = definitions
         self._stats = stats
         self._controller: GameController | None = None
+        self._level = "medium"
 
         # -- Bandeau du haut : « MOT : définition » ----------------------
         self._definition = QLabel("")
@@ -80,9 +83,9 @@ class GameWidget(QWidget):
         pass_btn = gold_button("⏭", "Passer")
         quit_btn = gold_button("⏻", "Quitter")
         shuffle_btn.clicked.connect(lambda: self._act("shuffle_rack"))
-        exchange_btn.clicked.connect(lambda: self._act("exchange_selected"))
-        pass_btn.clicked.connect(lambda: self._act("pass_turn"))
-        quit_btn.clicked.connect(self.quit_to_menu)
+        exchange_btn.clicked.connect(self._on_exchange)
+        pass_btn.clicked.connect(self._on_pass)
+        quit_btn.clicked.connect(self._on_quit)
 
         bottom = QHBoxLayout()
         bottom.setContentsMargins(12, 6, 12, 6)
@@ -104,16 +107,24 @@ class GameWidget(QWidget):
 
     # -- Cycle de vie d'une partie ---------------------------------------
     def start_game(self, level: str) -> None:
-        """(Re)démarre une partie avec le niveau d'IA donné (clé interne)."""
+        """Démarre une nouvelle partie avec le niveau d'IA donné (clé interne)."""
+        game = Game(["Joueur", "Ordinateur"], dictionary=self._dictionary,
+                    ai_flags=[False, True])
+        self._install(game, level)
+
+    def resume_game(self, game: Game, level: str) -> None:
+        """Reprend une partie sauvegardée (état déjà restauré dans `game`)."""
+        self._install(game, level)
+
+    def _install(self, game: Game, level: str) -> None:
         self.shutdown()
+        self._level = level
         for holder in (self._board_holder, self._rack_holder):
             while holder.count():
                 item = holder.takeAt(0)
                 if item.widget():
                     item.widget().deleteLater()
 
-        game = Game(["Joueur", "Ordinateur"], dictionary=self._dictionary,
-                    ai_flags=[False, True])
         ai = make_ai(level)
         if level.startswith("deepseek") and not getattr(ai, "available", True):
             self._comment.setText("Clé DEEPSEEK_API_KEY absente : IA algorithmique.")
@@ -135,8 +146,22 @@ class GameWidget(QWidget):
         self._controller.scores_changed.connect(self._show_scores)
         self._controller.bag_changed.connect(self._bag.set_count)
         self._controller.definition_changed.connect(self._show_definition)
+        self._controller.turn_finished.connect(self._on_turn_finished)
         self._definition.setText("")
         self._controller.start()
+        self._save_state()             # sauvegarde l'état initial (reprise possible)
+
+    def _on_turn_finished(self) -> None:
+        if self._controller is None:
+            return
+        if self._controller.game.is_over:
+            savegame.clear_save()      # plus rien à reprendre
+        else:
+            self._save_state()
+
+    def _save_state(self) -> None:
+        if self._controller is not None and not self._controller.game.is_over:
+            savegame.save_game(self._controller.game, self._level)
 
     def shutdown(self) -> None:
         if self._controller is not None:
@@ -157,3 +182,23 @@ class GameWidget(QWidget):
     def _act(self, method: str) -> None:
         if self._controller is not None:
             getattr(self._controller, method)()
+
+    # -- Dialogues (échanger / passer / quitter) -------------------------
+    def _on_exchange(self) -> None:
+        if self._controller is None:
+            return
+        selected = ExchangeDialog.get_selection(self, self._controller.rack_letters())
+        if selected:
+            self._controller.exchange_by_indices(selected)
+
+    def _on_pass(self) -> None:
+        if self._controller is None:
+            return
+        if ConfirmDialog.ask(self, "Passer ?", "Voulez-vous vraiment passer votre tour ?"):
+            self._controller.pass_turn()
+
+    def _on_quit(self) -> None:
+        if ConfirmDialog.ask(self, "Quitter",
+                             "Effacer cette partie et revenir au menu principal ?"):
+            savegame.clear_save()      # « Quitter » abandonne la partie
+            self.quit_to_menu.emit()
