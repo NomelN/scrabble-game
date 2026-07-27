@@ -24,8 +24,27 @@ QMainWindow, QStackedWidget, MenuWidget, GameWidget {{
 }}
 QLabel {{ color: #123; }}
 QComboBox {{
-    background: white; border: 1px solid #9db6c8; border-radius: 6px;
-    padding: 6px 8px; font-size: 15px;
+    background: white; border: 1px solid #9db6c8; border-radius: 8px;
+    padding: 8px 12px; font-size: 15px; color: #123; min-height: 24px;
+}}
+QComboBox:hover {{ border: 1px solid #6f93ab; }}
+QComboBox:focus {{ border: 2px solid #2f76bd; }}
+QComboBox::drop-down {{
+    subcontrol-origin: padding; subcontrol-position: center right;
+    width: 30px; border: none; background: transparent;
+}}
+QComboBox::down-arrow {{ image: none; width: 0; height: 0; }}
+QComboBox QAbstractItemView {{
+    background: white; border: 1px solid #9db6c8; border-radius: 8px;
+    outline: none; padding: 4px;
+    selection-background-color: #f2b23c; selection-color: #1c1c1c;
+}}
+QComboBox QAbstractItemView::item {{
+    min-height: 36px; padding: 4px 10px; color: #123;
+    border-radius: 6px;
+}}
+QComboBox QAbstractItemView::item:selected {{
+    background: #f2b23c; color: #1c1c1c;
 }}
 """
 

@@ -15,7 +15,8 @@ from ..core.game import Game
 from .board_view import BoardView
 from .controller import GameController
 from .dialogs import (
-    ConfirmDialog, EndGameSummaryDialog, ExchangeDialog, GameOverDialog,
+    BlankLetterDialog, ConfirmDialog, EndGameSummaryDialog, ExchangeDialog,
+    GameOverDialog,
 )
 from .rack_view import RackView
 from .widgets import BagWidget, gold_button, green_button
@@ -109,9 +110,12 @@ class GameWidget(QWidget):
 
     # -- Cycle de vie d'une partie ---------------------------------------
     def start_game(self, level: str) -> None:
-        """Démarre une nouvelle partie avec le niveau d'IA donné (clé interne)."""
+        """Démarre une nouvelle partie avec le niveau d'IA donné (clé interne).
+
+        Le joueur qui commence est tiré au sort (règle usuelle du Scrabble)."""
+        import random
         game = Game(["Joueur", "Ordinateur"], dictionary=self._dictionary,
-                    ai_flags=[False, True])
+                    ai_flags=[False, True], first_player=random.randrange(2))
         self._install(game, level)
 
     def resume_game(self, game: Game, level: str) -> None:
@@ -141,6 +145,7 @@ class GameWidget(QWidget):
 
         self._controller = GameController(
             game, board_view, rack_view, ai_players={1: ai}, human_index=0,
+            blank_resolver=lambda: BlankLetterDialog.get_letter(self),
             definitions=self._definitions, stats=self._stats,
         )
         self._controller.status_changed.connect(self._status.setText)

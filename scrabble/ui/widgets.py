@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import (
     QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen,
+    QPolygonF,
 )
-from PySide6.QtWidgets import QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QComboBox, QPushButton, QStyledItemDelegate, QWidget,
+)
 
 from . import theme
 
@@ -91,6 +94,37 @@ QPushButton {
 QPushButton:hover { background: #57c261; }
 QPushButton:disabled { background: #cbd3d8; border-color: #b3bcc2; color: #7a848b; }
 """
+
+
+class StyledComboBox(QComboBox):
+    """Combo au look de l'appli : la petite flèche est peinte à la main (un
+    triangle plein), plus fiable et net que la flèche native ou le triangle CSS
+    qui rendait mal selon la plateforme. Un `QStyledItemDelegate` explicite est
+    posé pour que les règles QSS de la liste (hauteur, surbrillance dorée)
+    s'appliquent — sinon l'élément sélectionné s'affichait blanc sur blanc."""
+
+    _ARROW = QColor("#0b2a45")
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setItemDelegate(QStyledItemDelegate(self))
+        self.setMinimumHeight(44)
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (API Qt)
+        super().paintEvent(event)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cx = self.width() - 20
+        cy = self.height() / 2
+        triangle = QPolygonF([
+            QPointF(cx - 6, cy - 3),
+            QPointF(cx + 6, cy - 3),
+            QPointF(cx, cy + 4),
+        ])
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(self._ARROW))
+        p.drawPolygon(triangle)
+        p.end()
 
 
 def gold_button(icon: str, label: str) -> QPushButton:

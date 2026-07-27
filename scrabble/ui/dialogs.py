@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
+    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
+    QWidget,
 )
 
 from ..core.tiles import BLANK, letter_value
@@ -178,6 +179,56 @@ class ExchangeDialog(_OverlayDialog):
         dialog = cls(parent, letters)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             return dialog.selected_indices()
+        return None
+
+
+class BlankLetterDialog(_OverlayDialog):
+    """Choix de la lettre représentée par un joker (« tuile neutre »).
+
+    Remplace le `QInputDialog` natif par une grille de tuiles A–Z au look de
+    l'appli : on touche la lettre voulue, ce qui valide directement.
+    """
+
+    _COLUMNS = 6
+
+    def __init__(self, parent) -> None:
+        super().__init__(parent)
+        self._chosen: str | None = None
+        self._card.setMaximumWidth(400)
+        self._add_title("Choisir une lettre")
+        self._add_message("Ce joker représentera la lettre :")
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        for i in range(26):
+            letter = chr(ord("A") + i)
+            button = QPushButton(letter)
+            button.setStyleSheet(_TILE_QSS)
+            button.setMinimumSize(44, 52)
+            button.clicked.connect(lambda _=False, l=letter: self._pick(l))
+            grid.addWidget(button, i // self._COLUMNS, i % self._COLUMNS)
+        self._card_layout.addSpacing(6)
+        self._card_layout.addLayout(grid)
+
+        cancel = gold_button("", "Annuler")
+        cancel.clicked.connect(self.reject)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(cancel)
+        row.addStretch(1)
+        self._card_layout.addSpacing(6)
+        self._card_layout.addLayout(row)
+
+    def _pick(self, letter: str) -> None:
+        self._chosen = letter
+        self.accept()
+
+    @classmethod
+    def get_letter(cls, parent) -> str | None:
+        dialog = cls(parent)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            return dialog._chosen
         return None
 
 

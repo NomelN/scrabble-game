@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox, QGridLayout, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget,
+    QGridLayout, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget,
 )
 
 from ..stats import Stats
-from .widgets import gold_button
+from .widgets import StyledComboBox, gold_button
 
 # Libellé affiché -> clé interne pour make_ai.
 LEVELS = {
@@ -51,9 +51,9 @@ class MenuWidget(QWidget):
             "font-size:44px; font-weight:800; color:#f7d05c; letter-spacing:2px;"
         )
 
-        self._dict_box = QComboBox()
+        self._dict_box = StyledComboBox()
         self._dict_box.addItem(dictionary_label)
-        self._level_box = QComboBox()
+        self._level_box = StyledComboBox()
         self._level_box.addItems(LEVELS.keys())
         self._level_box.setCurrentText("Moyen")
 

@@ -48,6 +48,7 @@ class Game:
         dictionary: Dictionary | None = None,
         ai_flags: list[bool] | None = None,
         seed: int | None = None,
+        first_player: int | None = None,
     ) -> None:
         if not 2 <= len(player_names) <= 4:
             raise ValueError("Le Scrabble se joue de 2 à 4 joueurs.")
@@ -59,7 +60,13 @@ class Game:
             Player(name=n, rack=Rack(self.bag.draw(RACK_SIZE)), is_ai=ai)
             for n, ai in zip(player_names, ai_flags)
         ]
-        self.current = 0
+        # Joueur qui commence (tiré au sort par l'appelant). ``None`` => le
+        # premier joueur, ce qui garde le cœur déterministe pour les tests.
+        if first_player is None:
+            first_player = 0
+        if not 0 <= first_player < len(self.players):
+            raise ValueError("first_player hors limites.")
+        self.current = first_player
         self.is_over = False
         self._consecutive_scoreless = 0  # 6 tours blancs => fin de partie
         self.events: list[GameEvent] = []

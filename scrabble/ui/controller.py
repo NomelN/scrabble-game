@@ -156,9 +156,20 @@ class GameController(QObject):
         if self.game.is_over:
             self.status_changed.emit("Partie terminée !")
             return
-        self._announce_turn()
+        self._announce_start()
         if self._current_is_ai():
             self._run_ai_turn()
+
+    def _announce_start(self) -> None:
+        """Annonce qui commence (le premier joueur est tiré au sort). Sur une
+        partie reprise (plateau déjà entamé), on annonce simplement le tour."""
+        if not self.game.board.is_empty:
+            self._announce_turn()
+            return
+        if self._current_is_ai():
+            self.status_changed.emit(f"{self.game.current_player.name} commence.")
+        else:
+            self.status_changed.emit("Vous commencez !")
 
     def _render_board(self) -> None:
         """Affiche les tuiles déjà présentes sur le plateau (partie reprise)."""
