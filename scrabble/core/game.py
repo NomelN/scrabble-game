@@ -132,7 +132,7 @@ class Game:
 
         # Fin de partie : le joueur a vidé son chevalet et le sac est vide.
         if not player.rack.tiles and self.bag.is_empty:
-            self._end_game()
+            self._end_game(finisher=self.current)
         else:
             self._advance()
         return result
@@ -174,14 +174,40 @@ class Game:
         if self._consecutive_scoreless >= len(self.players) * 3:
             self._end_game()
 
-    def _end_game(self) -> None:
-        # Décompte final : chaque joueur perd la valeur des tuiles restantes.
-        from .tiles import letter_value
-        for p in self.players:
-            p.score -= sum(letter_value(t) for t in p.rack.tiles if t != "?")
+    def _end_game(self, finisher: int | None = None) -> None:
+        """Décompte final.
+
+        Règle usuelle : le joueur qui a vidé son chevalet (``finisher``)
+        récupère la valeur des tuiles restantes de ses adversaires, qui la
+        perdent. Si la partie s'arrête sur des tours blancs (``finisher`` est
+        ``None``), chacun perd simplement la valeur de ses tuiles restantes.
+        """
+        from .tiles import BLANK, letter_value
+        remaining = [list(p.rack.tiles) for p in self.players]
+        penalties = [sum(letter_value(t) for t in tiles if t != BLANK)
+                     for tiles in remaining]
+        scores_before = [p.score for p in self.players]
+
+        for i, p in enumerate(self.players):
+            if i == finisher:
+                p.score += sum(pen for j, pen in enumerate(penalties)
+                               if j != finisher)
+            else:
+                p.score -= penalties[i]
+
         self.is_over = True
-        self._emit(GameEvent(EventType.GAME_OVER, self.current,
-                             {"scores": [p.score for p in self.players]}))
+        self._emit(GameEvent(
+            EventType.GAME_OVER,
+            self.current if finisher is None else finisher,
+            {
+                "finisher": finisher,
+                "remaining": remaining,
+                "penalties": penalties,
+                "scores_before": scores_before,
+                "scores_after": [p.score for p in self.players],
+                "scores": [p.score for p in self.players],  # rétro-compat
+            },
+        ))
 
     def _ensure_active(self) -> None:
         if self.is_over:

@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (
     QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
-from ..core.tiles import letter_value
-from .widgets import gold_button
+from ..core.tiles import BLANK, letter_value
+from .widgets import gold_button, green_button
 
 _OVERLAY_QSS = "#overlay { background: rgba(8, 20, 32, 0.55); }"
 _CARD_QSS = "#card { background: white; border-radius: 18px; }"
@@ -32,6 +32,28 @@ QPushButton:checked {
     background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #ffe07a, stop:1 #f2b23c);
 }
 """
+
+# Tuile décorative (non cliquable), pour l'écran de fin de partie.
+_TILE_LABEL_QSS = """
+QLabel {
+    background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #f8d15c, stop:1 #eaa62a);
+    border: 1px solid #c6871a; border-radius: 8px;
+    color: #1c1c1c; font-size: 22px; font-weight: bold;
+}
+"""
+
+
+def _tile_label(letter: str) -> QLabel:
+    """Petite tuile décorative affichant une lettre et sa valeur (E₁, F₄, …)."""
+    value = letter_value(letter)
+    text = ("" if letter == BLANK else letter.upper())
+    if value:
+        text += str(value).translate(_SUB)
+    label = QLabel(text or " ")
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    label.setFixedSize(48, 56)
+    label.setStyleSheet(_TILE_LABEL_QSS)
+    return label
 
 
 class _OverlayDialog(QDialog):
@@ -157,3 +179,144 @@ class ExchangeDialog(_OverlayDialog):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             return dialog.selected_indices()
         return None
+
+
+class EndGameSummaryDialog(_OverlayDialog):
+    """Récapitulatif du décompte final : qui a fini, tuiles restantes, scores.
+
+    Réplique la maquette « L'iPhone a fini en premier » : titre, tuiles
+    restantes de l'adversaire, puis les scores finaux avec l'ajustement
+    (par ex. « Joueur : 343 (350 - 7) »).
+    """
+
+    def __init__(self, parent, details: dict) -> None:
+        super().__init__(parent)
+        names = details["names"]
+        finisher = details["finisher"]
+        remaining = details["remaining"]
+        human = details["human_index"]
+
+        if finisher is None:
+            self._add_title("Partie bloquée")
+            self._card_layout.addSpacing(6)
+            self._add_message("Six tours sans marquer : la partie s'arrête.")
+            # On montre les tuiles encore en main de chaque joueur.
+            for i, name in enumerate(names):
+                if remaining[i]:
+                    self._add_message(f"Il restait à {name} :")
+                    self._add_tiles(remaining[i])
+        else:
+            self._add_title(f"{names[finisher]} a fini en premier")
+            self._card_layout.addSpacing(6)
+            # Tuiles restantes des adversaires (celles qui pèsent sur le score).
+            others = [i for i in range(len(names)) if i != finisher and remaining[i]]
+            for i in others:
+                lead = ("Il vous restait les lettres suivantes quand "
+                        f"{names[finisher]} a terminé :"
+                        if i == human
+                        else f"Il restait à {names[i]} les lettres suivantes :")
+                self._add_message(lead)
+                self._add_tiles(remaining[i])
+            if not others:
+                self._add_message(f"{names[finisher]} a posé toutes ses lettres.")
+
+        self._card_layout.addSpacing(6)
+        self._add_message("Scores finaux :")
+        self._add_scoreboard(details)
+        self._card_layout.addSpacing(6)
+        self._add_ok_button()
+
+    def _add_tiles(self, letters: list[str]) -> None:
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addStretch(1)
+        for letter in letters:
+            row.addWidget(_tile_label(letter))
+        row.addStretch(1)
+        self._card_layout.addLayout(row)
+
+    def _add_scoreboard(self, details: dict) -> None:
+        names = details["names"]
+        before = details["scores_before"]
+        after = details["scores_after"]
+        lines = []
+        for i, name in enumerate(names):
+            delta = after[i] - before[i]
+            if delta > 0:
+                adj = f"({before[i]} + {delta})"
+            elif delta < 0:
+                adj = f"({before[i]} - {abs(delta)})"
+            else:
+                adj = f"({before[i]})"
+            lines.append(f"{name} : {after[i]} {adj}")
+        board = QLabel("\n".join(lines))
+        board.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        board.setStyleSheet("font-size:17px; color:#333;")
+        self._card_layout.addWidget(board)
+
+    def _add_ok_button(self) -> None:
+        ok = gold_button("", "OK")
+        ok.clicked.connect(self.accept)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(ok)
+        row.addStretch(1)
+        self._card_layout.addSpacing(6)
+        self._card_layout.addLayout(row)
+
+    @classmethod
+    def show_summary(cls, parent, details: dict) -> None:
+        cls(parent, details).exec()
+
+
+class GameOverDialog(_OverlayDialog):
+    """« Partie terminée » : annonce le gagnant et propose Rejouer / Plateau / Quitter."""
+
+    REPLAY = "replay"
+    BOARD = "board"
+    QUIT = "quit"
+
+    def __init__(self, parent, details: dict) -> None:
+        super().__init__(parent)
+        self._choice = self.BOARD          # fermer la carte = voir le plateau
+        names = details["names"]
+        winner = details["winner"]
+        human = details["human_index"]
+
+        self._add_title("Partie terminée")
+        self._card_layout.addSpacing(6)
+        if winner is None:
+            headline = "Match nul !"
+        elif winner == human:
+            headline = "Vous avez gagné ! 🎉"
+        else:
+            headline = f"{names[winner]} a gagné."
+        self._add_message(headline)
+        self._add_message("Une petite revanche 😉 ?")
+        self._card_layout.addSpacing(6)
+        self._add_choice_buttons()
+
+    def _add_choice_buttons(self) -> None:
+        replay = green_button("Rejouer !")
+        board = gold_button("", "Plateau")
+        quit_btn = gold_button("", "Quitter")
+        replay.clicked.connect(lambda: self._pick(self.REPLAY))
+        board.clicked.connect(lambda: self._pick(self.BOARD))
+        quit_btn.clicked.connect(lambda: self._pick(self.QUIT))
+
+        self._card_layout.addWidget(replay)
+        row = QHBoxLayout()
+        row.setSpacing(14)
+        row.addWidget(board)
+        row.addWidget(quit_btn)
+        self._card_layout.addLayout(row)
+
+    def _pick(self, choice: str) -> None:
+        self._choice = choice
+        self.accept()
+
+    @classmethod
+    def ask(cls, parent, details: dict) -> str:
+        dialog = cls(parent, details)
+        dialog.exec()
+        return dialog._choice

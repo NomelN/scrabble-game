@@ -6,7 +6,7 @@ Séparé du menu : `MainWindow` bascule entre `MenuWidget` et `GameWidget` via u
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from .. import savegame
@@ -14,7 +14,9 @@ from ..ai import make_ai
 from ..core.game import Game
 from .board_view import BoardView
 from .controller import GameController
-from .dialogs import ConfirmDialog, ExchangeDialog
+from .dialogs import (
+    ConfirmDialog, EndGameSummaryDialog, ExchangeDialog, GameOverDialog,
+)
 from .rack_view import RackView
 from .widgets import BagWidget, gold_button, green_button
 
@@ -147,6 +149,7 @@ class GameWidget(QWidget):
         self._controller.bag_changed.connect(self._bag.set_count)
         self._controller.definition_changed.connect(self._show_definition)
         self._controller.turn_finished.connect(self._on_turn_finished)
+        self._controller.game_over.connect(self._on_game_over)
         self._definition.setText("")
         self._controller.start()
         self._save_state()             # sauvegarde l'état initial (reprise possible)
@@ -158,6 +161,21 @@ class GameWidget(QWidget):
             savegame.clear_save()      # plus rien à reprendre
         else:
             self._save_state()
+
+    def _on_game_over(self, details: dict) -> None:
+        """Fin de partie : diffère l'affichage pour laisser le tour se dénouer
+        proprement (le signal est émis au milieu de `_after_turn`)."""
+        savegame.clear_save()          # partie terminée : plus rien à reprendre
+        QTimer.singleShot(0, lambda: self._show_game_over(details))
+
+    def _show_game_over(self, details: dict) -> None:
+        EndGameSummaryDialog.show_summary(self, details)
+        choice = GameOverDialog.ask(self, details)
+        if choice == GameOverDialog.REPLAY:
+            self.start_game(self._level)
+        elif choice == GameOverDialog.QUIT:
+            self.quit_to_menu.emit()
+        # « Plateau » : on ferme les dialogues et on laisse le plateau visible.
 
     def _save_state(self) -> None:
         if self._controller is not None and not self._controller.game.is_over:

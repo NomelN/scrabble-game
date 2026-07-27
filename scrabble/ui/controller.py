@@ -88,7 +88,7 @@ class GameController(QObject):
     scores_changed = Signal(list)
     bag_changed = Signal(int)
     definition_changed = Signal(str, str)   # mot, définition (ou "" / "…")
-    game_over = Signal(bool, int)           # (le joueur a gagné, score du joueur)
+    game_over = Signal(dict)                # détails de fin de partie (voir _record_game_over)
     turn_finished = Signal()                # état stable après un coup (à sauvegarder)
 
     def __init__(
@@ -393,16 +393,29 @@ class GameController(QObject):
             elif event.type is EventType.PASSED:
                 self.status_changed.emit(f"{self.game.players[event.player].name} passe.")
             elif event.type is EventType.GAME_OVER:
-                self._record_game_over(event.payload["scores"])
+                self._record_game_over(event.payload)
         self._events_seen = len(self.game.events)
 
-    def _record_game_over(self, scores: list[int]) -> None:
+    def _record_game_over(self, payload: dict) -> None:
+        scores = payload["scores_after"]
+        best = max(scores)
         human = scores[self.human_index]
-        won = human == max(scores) and scores.count(max(scores)) == 1
+        won = human == best and scores.count(best) == 1
         if self.stats is not None:
             self.stats.record_game_end(human, won)
             self.stats.save()
-        self.game_over.emit(won, human)
+        winner = scores.index(best) if scores.count(best) == 1 else None
+        self.game_over.emit({
+            "won": won,
+            "human_index": self.human_index,
+            "winner": winner,                       # index du gagnant, ou None si égalité
+            "finisher": payload["finisher"],        # qui a vidé son chevalet (ou None)
+            "names": [p.name for p in self.game.players],
+            "remaining": payload["remaining"],
+            "penalties": payload["penalties"],
+            "scores_before": payload["scores_before"],
+            "scores_after": scores,
+        })
 
     # -- Définition du mot joué -------------------------------------------
     def _show_definition(self, word: str) -> None:
